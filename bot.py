@@ -3,6 +3,9 @@ import time
 import pytz
 from datetime import datetime
 import requests
+from flask import Flask, request
+
+app = Flask(_name_)
 
 # ==============================
 # CONFIG
@@ -105,84 +108,71 @@ def trend_check():
     return m15_dir, h1_dir
 
 # ==============================
-# MAIN LOOP
+# FLASK ROUTES
 # ==============================
 last_alert = {"level": None, "direction": None}
 
-def main():
-    print("🚀 Bot Started at", now_pkt())
-    send_telegram("🚀 Bot Started & Connected to TwelveData API")
+@app.route('/')
+def home():
+    return "🚀 Gold Bot is Running!"
 
-    while True:
-        try:
-            if not in_session():
-                print("⏳ Not in session", now_pkt())
-                time.sleep(CHECK_EVERY_SEC)
-                continue
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    # External service aap ko trigger kar sake (e.g., cron job)
+    data = request.json
+    # Yahan aap strategy run kar sakte hain
+    return "OK"
 
-            price = get_price()
-            if not price:
-                time.sleep(CHECK_EVERY_SEC)
-                continue
+def check_strategy():
+    # Strategy logic yahan daalen
+    price = get_price()
+    if not price:
+        return
 
-            # Near levels check
-            near_levels = [lv for lv in LEVELS if abs(price - lv) <= 1.0]  # 10 pips
-            if not near_levels:
-                time.sleep(CHECK_EVERY_SEC)
-                continue
+    near_levels = [lv for lv in LEVELS if abs(price - lv) <= 1.0]
+    if not near_levels:
+        return
 
-            # Candle confirmation
-            signal = price_action_confirmation()
-            if not signal:
-                time.sleep(CHECK_EVERY_SEC)
-                continue
+    signal = price_action_confirmation()
+    if not signal:
+        return
 
-            # Trend filter
-            m15_dir, h1_dir = trend_check()
-            if signal == "BUY" and not (m15_dir == 1 and h1_dir == 1):
-                time.sleep(CHECK_EVERY_SEC)
-                continue
-            if signal == "SELL" and not (m15_dir == -1 and h1_dir == -1):
-                time.sleep(CHECK_EVERY_SEC)
-                continue
+    m15_dir, h1_dir = trend_check()
+    if signal == "BUY" and not (m15_dir == 1 and h1_dir == 1):
+        return
+    if signal == "SELL" and not (m15_dir == -1 and h1_dir == -1):
+        return
 
-            # Prevent duplicate alerts
-            if last_alert["level"] == near_levels[0] and last_alert["direction"] == signal:
-                time.sleep(CHECK_EVERY_SEC)
-                continue
+    if last_alert["level"] == near_levels[0] and last_alert["direction"] == signal:
+        return
 
-            # SL & TP
-            if signal == "BUY":
-                sl = price - SL_PIPS * PIP_IN_PRICE
-                tp = price + TP_PIPS * PIP_IN_PRICE
-            else:
-                sl = price + SL_PIPS * PIP_IN_PRICE
-                tp = price - TP_PIPS * PIP_IN_PRICE
+    if signal == "BUY":
+        sl = price - SL_PIPS * PIP_IN_PRICE
+        tp = price + TP_PIPS * PIP_IN_PRICE
+    else:
+        sl = price + SL_PIPS * PIP_IN_PRICE
+        tp = price - TP_PIPS * PIP_IN_PRICE
 
-            msg = (
-                f"🔥 A+ Setup Found ({SYMBOL})\n\n"
-                f"Signal: {signal}\n"
-                f"Entry: {price:.2f}\n"
-                f"SL: {sl:.2f} ({SL_PIPS} pips)\n"
-                f"TP: {tp:.2f} ({TP_PIPS} pips)\n"
-                f"Lot Size: {LOT_SIZE}\n"
-                f"Level: {near_levels}\n"
-                f"Session: {'London' if now_pkt().hour<16 else 'New York'}\n\n"
-                f"⚡ Rule: Trade only if clean candle close is confirmed!"
-            )
+    msg = (
+        f"🔥 A+ Setup Found ({SYMBOL})\n\n"
+        f"Signal: {signal}\n"
+        f"Entry: {price:.2f}\n"
+        f"SL: {sl:.2f} ({SL_PIPS} pips)\n"
+        f"TP: {tp:.2f} ({TP_PIPS} pips)\n"
+        f"Lot Size: {LOT_SIZE}\n"
+        f"Level: {near_levels}\n"
+        f"Session: {'London' if now_pkt().hour<16 else 'New York'}\n\n"
+        f"⚡ Rule: Trade only if clean candle close is confirmed!"
+    )
 
-            print(msg)
-            send_telegram(msg)
+    print(msg)
+    send_telegram(msg)
+    last_alert["level"] = near_levels[0]
+    last_alert["direction"] = signal
 
-            # Save last alert
-            last_alert["level"] = near_levels[0]
-            last_alert["direction"] = signal
-
-            time.sleep(CHECK_EVERY_SEC)
-
-        except Exception as e:
-            print("Error:", e)
-            time.sleep(CHECK_EVERY_SEC)
-
-if __name__ == "__main__":
-    main()
+# ==============================
+# START (for Render)
+# ==============================
+if _name_ == '_main_':
+    # Flask server run karein
+    app.run(host='0.0.0.0', port=10000)
