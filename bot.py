@@ -5,7 +5,7 @@ from datetime import datetime
 import requests
 from flask import Flask, request
 
-app = Flask(_name_)
+app = Flask(__name__)
 
 # ==============================
 # CONFIG
