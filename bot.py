@@ -173,6 +173,6 @@ def check_strategy():
 # ==============================
 # START (for Render)
 # ==============================
-if _name_ == '_main_':
+if __name__ == '__main__':
     # Flask server run karein
     app.run(host='0.0.0.0', port=10000)
